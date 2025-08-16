@@ -1,17 +1,18 @@
+use bcrypt::{DEFAULT_COST, hash};
 use sqlx::{PgPool, Row};
 
-pub async fn get_user_by_username(
+pub async fn get_user_by_email(
     pool: &PgPool,
-    username: &str,
+    email: &str,
 ) -> Result<Option<(String, String)>, sqlx::Error> {
-    let row = sqlx::query("SELECT username, password_hash FROM users WHERE username = $1")
-        .bind(username)
+    let row = sqlx::query("SELECT email, password_hash FROM users WHERE email = $1")
+        .bind(email)
         .fetch_optional(pool)
         .await?;
 
     match row {
         Some(row) => {
-            let username: String = row.get("username");
+            let username: String = row.get("email");
             let password_hash: String = row.get("password_hash");
             Ok(Some((username, password_hash)))
         }
@@ -23,8 +24,9 @@ pub async fn create_user(
     pool: &PgPool,
     username: &str,
     email: &str,
-    password_hash: &str,
+    password: &str,
 ) -> Result<(i32, String, String), sqlx::Error> {
+    let password_hash = hash(password, DEFAULT_COST).expect("Failed to hash password");
     let row = sqlx::query(
         r#"
         INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)
@@ -95,7 +97,7 @@ mod users_db_test {
     }
 
     #[tokio::test]
-    async fn test_get_user_by_username_success() {
+    async fn test_get_user_by_email_success() {
         // Setup
         let pool = setup_test_db().await;
         let test_username = "testuser2";
@@ -106,7 +108,7 @@ mod users_db_test {
         insert_test_user(&pool, test_username, test_email, test_password_hash).await;
 
         // Test
-        let result = get_user_by_username(&pool, test_username).await;
+        let result = get_user_by_email(&pool, test_username).await;
 
         // Assert
         assert!(result.is_ok(), "Expected successful result");
@@ -119,13 +121,13 @@ mod users_db_test {
     }
 
     #[tokio::test]
-    async fn test_get_user_by_username_not_found() {
+    async fn test_get_user_by_email_not_found() {
         // Setup
         let pool = setup_test_db().await;
         let nonexistent_username = "nonexistent_user";
 
         // Test
-        let result = get_user_by_username(&pool, nonexistent_username).await;
+        let result = get_user_by_email(&pool, nonexistent_username).await;
 
         // Assert
         assert!(
@@ -137,7 +139,7 @@ mod users_db_test {
     }
 
     #[tokio::test]
-    async fn test_get_user_by_username_case_sensitive() {
+    async fn test_get_user_by_email_case_sensitive() {
         // Setup
         let pool = setup_test_db().await;
         let test_username = "TestUser";
@@ -148,12 +150,12 @@ mod users_db_test {
         insert_test_user(&pool, test_username, test_email, test_password_hash).await;
 
         // Test with exact case
-        let result_exact = get_user_by_username(&pool, "TestUser").await;
+        let result_exact = get_user_by_email(&pool, "TestUser").await;
         assert!(result_exact.is_ok());
         assert!(result_exact.unwrap().is_some());
 
         // Test with different case
-        let result_different_case = get_user_by_username(&pool, "testuser").await;
+        let result_different_case = get_user_by_email(&pool, "testuser").await;
         assert!(result_different_case.is_ok());
         assert!(
             result_different_case.unwrap().is_none(),
@@ -162,7 +164,7 @@ mod users_db_test {
     }
 
     #[tokio::test]
-    async fn test_get_user_by_username_with_special_characters() {
+    async fn test_get_user_by_email_with_special_characters() {
         // Setup
         let pool = setup_test_db().await;
         let test_username = "user@domain.com";
@@ -173,7 +175,7 @@ mod users_db_test {
         insert_test_user(&pool, test_username, test_email, test_password_hash).await;
 
         // Test
-        let result = get_user_by_username(&pool, test_username).await;
+        let result = get_user_by_email(&pool, test_username).await;
 
         // Assert
         assert!(result.is_ok());
@@ -197,7 +199,7 @@ mod users_db_test {
         assert!(create_result.is_ok(), "Failed to create user");
 
         // Retrieve the user
-        let result = get_user_by_username(&pool, test_username).await;
+        let result = get_user_by_email(&pool, test_username).await;
 
         // Assert
         assert!(result.is_ok());

@@ -1,4 +1,4 @@
-use crate::database::users::{create_user, get_user_by_username};
+use crate::database::users::{create_user, get_user_by_email};
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use jwt::{SignWithKey, VerifyWithKey};
@@ -28,11 +28,11 @@ pub enum AuthError {
 
 pub async fn authenticate_user(
     pool: &PgPool,
-    username: &str,
+    email: &str,
     password: &str,
 ) -> Result<bool, AuthError> {
     // Get user from database
-    match get_user_by_username(pool, username).await {
+    match get_user_by_email(pool, email).await {
         Ok(Some((_, password_hash))) => {
             // Verify password using bcrypt
             match bcrypt::verify(password, &password_hash) {

@@ -2,11 +2,12 @@ mod database;
 mod handlers;
 mod services;
 
+use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use database::{create_connection_pool, init_database};
 use dotenv::dotenv;
 use env_logger;
-use handlers::auth::{auth_handlers::login, register_handlers::register_user};
+use handlers::auth::{login, register_user};
 use handlers::health::health_check;
 
 #[actix_web::main] // or #[tokio::main]
@@ -28,6 +29,12 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .wrap(
+                Cors::default()
+                    .allowed_origin("http://localhost:3000")
+                    .allow_any_method()
+                    .allow_any_header(),
+            )
             .app_data(web::Data::new(pool.clone()))
             .service(health_check)
             .service(login)
