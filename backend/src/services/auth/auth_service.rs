@@ -1,4 +1,4 @@
-use crate::database::get_user_by_username;
+use crate::database::users::{create_user, get_user_by_username};
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use jwt::{SignWithKey, VerifyWithKey};
@@ -56,7 +56,7 @@ pub async fn create_user_account(
         bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|_| AuthError::InvalidCredentials)?;
 
     // Create user in database
-    crate::database::create_user(pool, username, email, &password_hash)
+    create_user(pool, username, email, &password_hash)
         .await
         .map_err(|_| AuthError::InvalidCredentials)?;
 

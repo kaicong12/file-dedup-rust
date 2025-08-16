@@ -6,7 +6,7 @@ use actix_web::{App, HttpServer, middleware::Logger, web};
 use database::{create_connection_pool, init_database};
 use dotenv::dotenv;
 use env_logger;
-use handlers::auth::auth_handlers::login;
+use handlers::auth::{auth_handlers::login, register_handlers::register_user};
 use handlers::health::health_check;
 
 #[actix_web::main] // or #[tokio::main]
@@ -31,6 +31,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .service(health_check)
             .service(login)
+            .service(register_user)
             // enable logger - always register Actix Web Logger middleware last
             .wrap(Logger::default())
     })
