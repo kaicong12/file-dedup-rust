@@ -59,23 +59,55 @@ const FileDeduplicationSystem = () => {
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Initialize auth token from localStorage on client side only
+  // Check authentication status on component mount
   useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    setAuthToken(token);
+    checkAuthStatus();
   }, []);
 
+  const checkAuthStatus = async (): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/profile`, {
+        method: "GET",
+        credentials: "include", // Include cookies in the request
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const userData: User = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
+        fetchJobs();
+        connectWebSocket();
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Failed to check auth status:", error);
+      setIsAuthenticated(false);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const fetchJobs = useCallback(async (): Promise<void> => {
-    if (!authToken) return;
+    if (!isAuthenticated) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/jobs`, {
-        headers: { Authorization: `Bearer ${authToken}` },
+        credentials: "include", // Include cookies
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
       if (response.ok) {
         const jobsData: Job[] = await response.json();
@@ -84,7 +116,7 @@ const FileDeduplicationSystem = () => {
     } catch (error) {
       console.error("Failed to fetch jobs:", error);
     }
-  }, [authToken]);
+  }, [isAuthenticated]);
 
   const handleWebSocketMessage = useCallback(
     (data: WebSocketMessage): void => {
@@ -115,9 +147,10 @@ const FileDeduplicationSystem = () => {
 
   // WebSocket connection for real-time updates
   const connectWebSocket = useCallback((): void => {
-    if (wsRef.current || !authToken) return;
+    if (wsRef.current || !isAuthenticated) return;
 
-    wsRef.current = new WebSocket(`${WS_URL}?token=${authToken}`);
+    // For cookie-based auth, we don't need to pass token in URL
+    wsRef.current = new WebSocket(WS_URL);
 
     wsRef.current.onmessage = (event: MessageEvent) => {
       const data: WebSocketMessage = JSON.parse(event.data);
@@ -127,67 +160,59 @@ const FileDeduplicationSystem = () => {
     wsRef.current.onclose = () => {
       wsRef.current = null;
       // Reconnect after 3 seconds if still authenticated
-      if (authToken) {
+      if (isAuthenticated) {
         setTimeout(connectWebSocket, 3000);
       }
     };
-  }, [authToken, handleWebSocketMessage]);
+  }, [isAuthenticated, handleWebSocketMessage]);
 
-  const logout = useCallback((): void => {
-    setAuthToken(null);
-    setUser(null);
-    localStorage.removeItem("auth_token");
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      // Call logout endpoint to clear the JWT cookie
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include", // Include cookies
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    } finally {
+      // Clear local state regardless of API call success
+      setIsAuthenticated(false);
+      setUser(null);
+      setJobs([]);
+      setCurrentJob(null);
+
+      // Close WebSocket connection
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      addNotification("success", "Logged out successfully");
     }
   }, []);
-
-  const fetchUserProfile = useCallback(async (): Promise<void> => {
-    if (!authToken) return;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/user/profile`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (response.ok) {
-        const userData: User = await response.json();
-        setUser(userData);
-        fetchJobs();
-      } else {
-        logout();
-      }
-    } catch (error) {
-      console.error("Failed to fetch user profile:", error);
-      logout();
-    }
-  }, [authToken, fetchJobs, logout]);
-
-  // Authentication check
-  useEffect(() => {
-    if (authToken) {
-      fetchUserProfile();
-      connectWebSocket();
-    }
-  }, [authToken, connectWebSocket, fetchUserProfile]);
 
   const login = async (email: string, password: string): Promise<void> => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include cookies
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, password }),
       });
 
       if (response.ok) {
-        const { token, user: userData }: { token: string; user: User } =
-          await response.json();
-        console.log({ token });
-        setAuthToken(token);
+        const { user: userData }: { user: User } = await response.json();
         setUser(userData);
-        localStorage.setItem("auth_token", token);
+        setIsAuthenticated(true);
         connectWebSocket();
         fetchJobs();
+        addNotification("success", "Logged in successfully");
       } else {
         const error = await response.json();
         addNotification("error", error.message || "Login failed");
@@ -210,7 +235,7 @@ const FileDeduplicationSystem = () => {
   };
 
   const uploadFiles = async (files: File[]): Promise<void> => {
-    if (!files.length || !authToken) return;
+    if (!files.length || !isAuthenticated) return;
 
     // Validate file types and sizes
     const maxFileSize = 100 * 1024 * 1024; // 100MB
@@ -244,9 +269,7 @@ const FileDeduplicationSystem = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/jobs/create`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
+        credentials: "include", // Include cookies
         body: formData,
       });
 
@@ -269,12 +292,12 @@ const FileDeduplicationSystem = () => {
   };
 
   const deleteJob = async (jobId: string): Promise<void> => {
-    if (!authToken) return;
+    if (!isAuthenticated) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
+        credentials: "include", // Include cookies
       });
 
       if (response.ok) {
@@ -288,11 +311,11 @@ const FileDeduplicationSystem = () => {
   };
 
   const downloadResults = async (jobId: string): Promise<void> => {
-    if (!authToken) return;
+    if (!isAuthenticated) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/results`, {
-        headers: { Authorization: `Bearer ${authToken}` },
+        credentials: "include", // Include cookies
       });
 
       if (response.ok) {
@@ -310,15 +333,27 @@ const FileDeduplicationSystem = () => {
     }
   };
 
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show login form if not authenticated
-  if (!authToken) {
+  if (!isAuthenticated) {
     return <LoginForm onLogin={login} />;
   }
 
   // Show dashboard if authenticated
   return (
     <Dashboard
-      user={user}
+      user={user!}
       jobs={jobs}
       currentJob={currentJob}
       uploadProgress={uploadProgress}

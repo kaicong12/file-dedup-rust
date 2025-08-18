@@ -55,7 +55,7 @@ interface Job {
 }
 
 interface DashboardProps {
-  user: User | null;
+  user: User;
   jobs: Job[];
   currentJob: Job | null;
   uploadProgress: number;
@@ -157,7 +157,9 @@ const Dashboard: React.FC<DashboardProps> = ({
             Secure File Deduplication System
           </h1>
           <div className="flex items-center gap-4">
-            <span className="text-gray-600">Welcome, {user?.name}</span>
+            <span className="text-gray-600">
+              Welcome, {user?.name || user?.email}
+            </span>
             <button
               onClick={onLogout}
               className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"

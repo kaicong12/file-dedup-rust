@@ -33,7 +33,8 @@ async fn main() -> std::io::Result<()> {
                 Cors::default()
                     .allowed_origin("http://localhost:3000")
                     .allow_any_method()
-                    .allow_any_header(),
+                    .allow_any_header()
+                    .supports_credentials(),
             )
             .app_data(web::Data::new(pool.clone()))
             .service(health_check)
