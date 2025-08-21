@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  Upload,
   FileText,
   Trash2,
   HardDrive,
@@ -13,6 +12,7 @@ import {
   Eye,
   Download,
 } from "lucide-react";
+import MultipartUpload from "./MultipartUpload";
 
 interface User {
   id: string;
@@ -54,44 +54,82 @@ interface Job {
   results?: JobResults;
 }
 
+interface UploadResult {
+  fileName: string;
+  success: boolean;
+  error?: string;
+}
+
 interface DashboardProps {
   user: User;
   jobs: Job[];
   currentJob: Job | null;
-  uploadProgress: number;
-  isUploading: boolean;
   notifications: Notification[];
   onLogout: () => void;
-  onUploadFiles: (files: File[]) => Promise<void>;
   onDeleteJob: (jobId: string) => Promise<void>;
   onDownloadResults: (jobId: string) => Promise<void>;
   onFetchJobs: () => Promise<void>;
   onSetCurrentJob: (job: Job | null) => void;
+  onAddNotification: (type: Notification["type"], message: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
   user,
   jobs,
   currentJob,
-  uploadProgress,
-  isUploading,
   notifications,
   onLogout,
-  onUploadFiles,
   onDeleteJob,
   onDownloadResults,
   onFetchJobs,
   onSetCurrentJob,
+  onAddNotification,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Internal upload state
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
-  const handleFileUpload = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ): void => {
-    if (!event.target.files) return;
-    const files = Array.from(event.target.files);
-    onUploadFiles(files);
-  };
+  // Upload handlers
+  const handleUploadComplete = useCallback(
+    (results: UploadResult[]) => {
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
+
+      if (successCount > 0) {
+        onAddNotification(
+          "success",
+          `Successfully uploaded ${successCount} file(s)`
+        );
+        // Refresh jobs after successful upload
+        onFetchJobs();
+      }
+
+      if (failCount > 0) {
+        onAddNotification("error", `Failed to upload ${failCount} file(s)`);
+      }
+
+      setIsUploading(false);
+    },
+    [onAddNotification, onFetchJobs]
+  );
+
+  const handleUploadProgress = useCallback((progress: number) => {
+    setUploadProgress(progress);
+  }, []);
+
+  const handleUploadStart = useCallback(() => {
+    setIsUploading(true);
+    setUploadProgress(0);
+  }, []);
+
+  const handleUploadError = useCallback(
+    (error: string) => {
+      onAddNotification("error", error);
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+    [onAddNotification]
+  );
 
   const getStatusIcon = (status: Job["status"]): React.ReactElement => {
     switch (status) {
@@ -176,47 +214,27 @@ const Dashboard: React.FC<DashboardProps> = ({
           Upload Files for Deduplication
         </h2>
 
-        <div
-          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
-          role="button"
-          tabIndex={0}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              fileInputRef.current?.click();
-            }
-          }}
-        >
-          <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-lg text-gray-600">
-            Click to upload files or drag and drop
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            Supported: Images, Documents, PDFs (Max 100MB per file)
-          </p>
-          {isUploading && (
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Uploading... {uploadProgress}%
-              </p>
-            </div>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileUpload}
-          className="hidden"
-          disabled={isUploading}
+        <MultipartUpload
+          onUploadComplete={handleUploadComplete}
+          onUploadProgress={handleUploadProgress}
+          onUploadStart={handleUploadStart}
+          onUploadError={handleUploadError}
+          isAuthenticated={!!user}
         />
+
+        {isUploading && (
+          <div className="mt-4">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Uploading... {uploadProgress}%
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Jobs List */}

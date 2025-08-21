@@ -57,47 +57,11 @@ const WS_URL = process.env.REACT_APP_WS_URL || "ws://localhost:8080/ws";
 const FileDeduplicationSystem = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const wsRef = useRef<WebSocket | null>(null);
-
-  // Check authentication status on component mount
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async (): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/user/profile`, {
-        method: "GET",
-        credentials: "include", // Include cookies in the request
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const userData: User = await response.json();
-        setUser(userData);
-        setIsAuthenticated(true);
-        fetchJobs();
-        connectWebSocket();
-      } else {
-        setIsAuthenticated(false);
-        setUser(null);
-      }
-    } catch (error) {
-      console.error("Failed to check auth status:", error);
-      setIsAuthenticated(false);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const fetchJobs = useCallback(async (): Promise<void> => {
     if (!isAuthenticated) return;
@@ -234,62 +198,23 @@ const FileDeduplicationSystem = () => {
     }, 5000);
   };
 
-  const uploadFiles = async (files: File[]): Promise<void> => {
-    if (!files.length || !isAuthenticated) return;
+  const checkAuthStatus = useCallback(async (): Promise<void> => {
+    // For now, just set authenticated as true without calling /profile endpoint
+    setUser({
+      id: "1",
+      name: "Test User",
+      email: "test@example.com",
+    });
+    setIsAuthenticated(true);
+    setIsLoading(false);
+    // fetchJobs();
+    // connectWebSocket();
+  }, []);
 
-    // Validate file types and sizes
-    const maxFileSize = 100 * 1024 * 1024; // 100MB
-    const allowedTypes = [
-      "image/",
-      "text/",
-      "application/pdf",
-      "application/msword",
-    ];
-
-    for (const file of files) {
-      if (file.size > maxFileSize) {
-        addNotification("error", `File ${file.name} is too large (max 100MB)`);
-        return;
-      }
-
-      if (!allowedTypes.some((type) => file.type.startsWith(type))) {
-        addNotification("error", `File type ${file.type} is not allowed`);
-        return;
-      }
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append("files", file);
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/jobs/create`, {
-        method: "POST",
-        credentials: "include", // Include cookies
-        body: formData,
-      });
-
-      if (response.ok) {
-        const job: Job = await response.json();
-        setCurrentJob(job);
-        addNotification("success", `Deduplication job created: ${job.id}`);
-        fetchJobs();
-      } else {
-        const error = await response.json();
-        addNotification("error", error.message || "Upload failed");
-      }
-    } catch (error) {
-      console.error("Upload failed:", error);
-      addNotification("error", "Upload failed");
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
+  // Check authentication status on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, [checkAuthStatus]);
 
   const deleteJob = async (jobId: string): Promise<void> => {
     if (!isAuthenticated) return;
@@ -356,15 +281,13 @@ const FileDeduplicationSystem = () => {
       user={user!}
       jobs={jobs}
       currentJob={currentJob}
-      uploadProgress={uploadProgress}
-      isUploading={isUploading}
       notifications={notifications}
       onLogout={logout}
-      onUploadFiles={uploadFiles}
       onDeleteJob={deleteJob}
       onDownloadResults={downloadResults}
       onFetchJobs={fetchJobs}
       onSetCurrentJob={setCurrentJob}
+      onAddNotification={addNotification}
     />
   );
 };

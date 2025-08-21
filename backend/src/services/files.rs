@@ -13,9 +13,9 @@ pub struct S3Client {
     client: Client,
 }
 
-struct MultipartUploadParams {
-    upload_id: String,
-    part: i32,
+pub struct MultipartUploadParams {
+    pub upload_id: String,
+    pub part: i32,
 }
 
 type S3Result<T> = Result<T, S3Error>;
