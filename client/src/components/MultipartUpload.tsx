@@ -90,6 +90,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
             method: "POST",
             credentials: "include",
             headers: {
+              Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -123,6 +124,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
               credentials: "include",
               headers: {
                 "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
               },
               body: JSON.stringify({
                 bucket,
@@ -159,6 +161,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
             credentials: "include",
             headers: {
               "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
             },
             body: JSON.stringify({
               bucket,

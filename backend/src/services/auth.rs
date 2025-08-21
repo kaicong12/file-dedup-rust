@@ -11,8 +11,8 @@ use sqlx::PgPool;
 // 2. The password is compared against a hashed version stored in DB
 // 3. If valid, returns a JWT token in the response header, and set this token into local storage
 // 4. Client sends this JWT token as Bearer <auth_token> using the Authorization header in future requests
-#[derive(Serialize, Deserialize)]
-struct Claims {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Claims {
     username: String,
     issued_at: DateTime<Utc>,
     expiration: u64, // minutes since created at before token expiration
@@ -63,14 +63,14 @@ pub async fn create_user_account(
     Ok(())
 }
 
-fn verify_jwt_token(token: &str) -> Result<Claims, AuthError> {
+pub fn verify_jwt_token(token: &str) -> Result<Claims, AuthError> {
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT Secret must be specified");
     let key: Hmac<Sha256> =
         Hmac::new_from_slice(jwt_secret.as_bytes()).map_err(|_| AuthError::InvalidToken)?;
 
     let claims: Claims = token
         .verify_with_key(&key)
-        .map_err(|_| AuthError::InvalidToken)?;
+        .map_err(|_| AuthError::InvalidCredentials)?;
 
     Ok(claims)
 }
