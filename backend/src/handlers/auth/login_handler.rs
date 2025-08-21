@@ -1,4 +1,4 @@
-use crate::services::auth_service::{AuthError, authenticate_user, generate_jwt_token};
+use crate::services::auth::{AuthError, authenticate_user, generate_jwt_token};
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;

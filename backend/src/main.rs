@@ -8,6 +8,7 @@ use database::{create_connection_pool, init_database};
 use dotenv::dotenv;
 use env_logger;
 use handlers::auth::{login, register_user};
+use handlers::files::{complete_upload, initiate_upload};
 use handlers::health::health_check;
 
 #[actix_web::main] // or #[tokio::main]
@@ -40,6 +41,8 @@ async fn main() -> std::io::Result<()> {
             .service(health_check)
             .service(login)
             .service(register_user)
+            .service(initiate_upload)
+            .service(complete_upload)
             // enable logger - always register Actix Web Logger middleware last
             .wrap(Logger::default())
     })
