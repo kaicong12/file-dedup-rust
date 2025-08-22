@@ -1,1 +1,27 @@
 .env
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Terraform variable files (may contain sensitive data)
+*.tfvars
+*.tfvars.json
+
+# Override files as they are usually used to override resources locally and so
+# are not checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Terraform plan files (contain sensitive information)
+*.tfplan
+*.tfplan.*
