@@ -22,6 +22,7 @@ actix-cors = "0.7.1"
 aws-sdk-s3 = "1.103.0"
 aws-config = { version = "1.8.5", features = ["behavior-version-latest"] }
 futures-util = "0.3.31"
+envy = "0.4"
 
 [dev-dependencies]
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "sqlite"] }

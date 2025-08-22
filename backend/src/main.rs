@@ -1,3 +1,4 @@
+mod config;
 mod database;
 mod handlers;
 mod middleware;
@@ -5,30 +6,29 @@ mod services;
 
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
-use database::{create_connection_pool, init_database};
-use dotenv::dotenv;
+use sqlx::PgPool;
+
 use env_logger;
 use handlers::auth::{login, register_user};
 use handlers::files::{complete_upload, generate_presigned_url, initiate_upload};
 use handlers::health::health_check;
 use middleware::Auth;
 
-#[actix_web::main] // or #[tokio::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+#[actix_web::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting HTTP server at http://localhost:8080");
 
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
+    let env_variables = config::Config::initialize("../.env");
+
     // Create database connection pool
-    let pool = create_connection_pool()
+    let database_url = &env_variables.database_url;
+    let pool = PgPool::connect(database_url)
         .await
         .expect("Failed to create database pool");
 
-    // Initialize database (create tables if they don't exist)
-    init_database(&pool)
-        .await
-        .expect("Failed to initialize database");
+    sqlx::migrate!("./src/migrations").run(&pool).await?;
 
     HttpServer::new(move || {
         App::new()
@@ -40,6 +40,7 @@ async fn main() -> std::io::Result<()> {
                     .supports_credentials(),
             )
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(env_variables.clone()))
             .service(health_check)
             .service(login)
             .service(register_user)
@@ -56,4 +57,5 @@ async fn main() -> std::io::Result<()> {
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
+    .map_err(Into::into)
 }
