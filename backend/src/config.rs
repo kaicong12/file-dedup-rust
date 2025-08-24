@@ -7,8 +7,6 @@ pub struct Config {
     pub aws_profile_name: String,
     pub s3_bucket_name: String,
     pub s3_document_prefix: String,
-    pub openai_api_key: String,
-    pub openai_base_url: String,
 }
 
 impl Config {

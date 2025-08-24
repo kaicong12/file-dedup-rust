@@ -457,6 +457,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-bedrockruntime"
+version = "1.103.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b3bbd237ec790046e1ecc9ad97de30214c6df36b6b731503e520b0fca102610"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-sigv4",
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 0.2.12",
+ "hyper 0.14.32",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-s3"
 version = "1.103.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -803,7 +828,9 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "aws-config",
+ "aws-sdk-bedrockruntime",
  "aws-sdk-s3",
+ "base64 0.21.7",
  "bcrypt",
  "chrono",
  "dotenv",

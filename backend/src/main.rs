@@ -3,6 +3,7 @@ mod database;
 mod handlers;
 mod middleware;
 mod services;
+mod worker;
 
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
