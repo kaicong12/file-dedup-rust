@@ -17,7 +17,7 @@ A production-ready file deduplication system built with Rust and React, featurin
 - **Async Architecture**: Built on Actix-web for high performance
 - **Job Queue System**: Redis-powered queue for long-running tasks
 - **Database**: PostgreSQL with row-level security (RLS)
-- **Deduplication Engine**: SHA-256 hashing with parallel processing
+- **Deduplication Engine**: SHA-256 hashing + OpenSearch based for near duplication
 - **Multi-tenancy**: Complete user isolation and data security
 
 ## 🔒 Security Measures
@@ -25,7 +25,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 ### Authentication & Authorization
 
 - **JWT Authentication**: Secure token generation and validation
-- **Database Security**: Row-level security (RLS) in PostgreSQL
 - **Password Security**: bcrypt hashing with salt
 - **Rate Limiting**:
   - 10 API calls/minute
