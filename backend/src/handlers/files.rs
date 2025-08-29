@@ -1,25 +1,23 @@
+use crate::config::Config;
 use crate::services::files::{MultipartUploadParams, S3Client};
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 struct InitializeUploadRequest {
-    bucket: String,
-    key: String,
+    filename: String,
 }
 
 #[derive(Deserialize)]
 struct CompleteUploadRequest {
-    bucket: String,
-    key: String,
+    filename: String,
     upload_id: String,
     parts: Vec<(i32, String)>,
 }
 
 #[derive(Deserialize)]
 struct PresignedUrlRequest {
-    bucket: String,
-    key: String,
+    filename: String,
     expires_in_secs: Option<u64>,
     upload_id: Option<String>,
     part_number: Option<i32>,
@@ -36,10 +34,15 @@ struct PresignedUrlResponse {
 }
 
 #[post("/upload/initiate")]
-pub async fn initiate_upload(req_body: web::Json<InitializeUploadRequest>) -> impl Responder {
-    let s3_client = S3Client::new("sso_profile").await;
+pub async fn initiate_upload(
+    req_body: web::Json<InitializeUploadRequest>,
+    config: web::Data<Config>,
+) -> impl Responder {
+    let s3_client = S3Client::new(&config.aws_profile_name).await;
+    let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
+
     let multipart_result = s3_client
-        .create_multipart_upload(&req_body.bucket, &req_body.key)
+        .create_multipart_upload(&config.s3_bucket_name, &key)
         .await;
 
     match multipart_result {
@@ -49,12 +52,17 @@ pub async fn initiate_upload(req_body: web::Json<InitializeUploadRequest>) -> im
 }
 
 #[post("/upload/complete")]
-pub async fn complete_upload(req_body: web::Json<CompleteUploadRequest>) -> impl Responder {
-    let s3_client = S3Client::new("sso_profile").await;
+pub async fn complete_upload(
+    req_body: web::Json<CompleteUploadRequest>,
+    config: web::Data<Config>,
+) -> impl Responder {
+    let s3_client = S3Client::new(&config.aws_profile_name).await;
+    let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
+
     let complete_result = s3_client
         .complete_multipart_upload(
-            &req_body.bucket,
-            &req_body.key,
+            &config.s3_bucket_name,
+            &key,
             req_body.upload_id.clone(),
             req_body.parts.clone(),
         )
@@ -67,8 +75,12 @@ pub async fn complete_upload(req_body: web::Json<CompleteUploadRequest>) -> impl
 }
 
 #[post("/upload/presigned-url")]
-pub async fn generate_presigned_url(req_body: web::Json<PresignedUrlRequest>) -> impl Responder {
-    let s3_client = S3Client::new("sso_profile").await;
+pub async fn generate_presigned_url(
+    req_body: web::Json<PresignedUrlRequest>,
+    config: web::Data<Config>,
+) -> impl Responder {
+    let s3_client = S3Client::new(&config.aws_profile_name).await;
+    let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
 
     // Default expiration time is 1 hour (3600 seconds)
     let expires_in = req_body.expires_in_secs.unwrap_or(3600);
@@ -83,12 +95,7 @@ pub async fn generate_presigned_url(req_body: web::Json<PresignedUrlRequest>) ->
     };
 
     let presigned_result = s3_client
-        .generate_presigned_upload_url(
-            &req_body.bucket,
-            &req_body.key,
-            expires_in,
-            multipart_params,
-        )
+        .generate_presigned_upload_url(&config.s3_bucket_name, &key, expires_in, multipart_params)
         .await;
 
     match presigned_result {

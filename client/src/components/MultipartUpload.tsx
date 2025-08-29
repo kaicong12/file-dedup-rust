@@ -80,9 +80,6 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
   const uploadSingleFile = useCallback(
     async (file: File): Promise<UploadResult> => {
       try {
-        const bucket = "mmc-did-msdora-s3-bucket";
-        const key = `documents/${file.name}`;
-
         // Step 1: Initiate multipart upload
         const initiateResponse = await fetch(
           `${API_BASE_URL}/upload/initiate`,
@@ -94,8 +91,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              bucket,
-              key,
+              filename: file.name,
             }),
           }
         );
@@ -127,8 +123,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
                 Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
               },
               body: JSON.stringify({
-                bucket,
-                key,
+                filename: file.name,
                 upload_id,
                 part_number: partNumber,
                 expires_in_secs: 3600,
@@ -164,8 +159,7 @@ const MultipartUpload: React.FC<MultipartUploadProps> = ({
               Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
             },
             body: JSON.stringify({
-              bucket,
-              key,
+              filename: file.name,
               upload_id,
               parts: uploadedParts.map((part) => [part.partNumber, part.etag]),
             }),
