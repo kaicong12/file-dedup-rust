@@ -9,7 +9,15 @@ use std::future::{Ready, ready};
 
 use crate::services::auth::{AuthError, verify_jwt_token};
 
-pub struct Auth;
+pub struct Auth {
+    jwt_secret: String,
+}
+
+impl Auth {
+    pub fn new(jwt_secret: String) -> Self {
+        Auth { jwt_secret }
+    }
+}
 
 impl<S, B> Transform<S, ServiceRequest> for Auth
 where
@@ -25,12 +33,16 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(AuthMiddleware { service }))
+        ready(Ok(AuthMiddleware {
+            service,
+            jwt_secret: self.jwt_secret.clone(),
+        }))
     }
 }
 
 pub struct AuthMiddleware<S> {
     service: S,
+    jwt_secret: String,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
@@ -47,6 +59,8 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let jwt_secret = self.jwt_secret.clone();
+
         // Extract and verify the authorization token
         let auth_result = req
             .headers()
@@ -59,7 +73,7 @@ where
                 } else {
                     token
                 };
-                verify_jwt_token(token)
+                verify_jwt_token(token, &jwt_secret)
             });
 
         match auth_result {

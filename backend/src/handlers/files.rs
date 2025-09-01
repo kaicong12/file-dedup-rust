@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::services::files::{MultipartUploadParams, S3Client};
+use crate::worker::JobQueue;
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Row};
 
 #[derive(Deserialize)]
 struct InitializeUploadRequest {
@@ -55,6 +57,7 @@ pub async fn initiate_upload(
 pub async fn complete_upload(
     req_body: web::Json<CompleteUploadRequest>,
     config: web::Data<Config>,
+    db_pool: web::Data<PgPool>,
 ) -> impl Responder {
     let s3_client = S3Client::new(&config.aws_profile_name).await;
     let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
@@ -69,7 +72,54 @@ pub async fn complete_upload(
         .await;
 
     match complete_result {
-        Ok(_) => HttpResponse::Ok().finish(),
+        Ok(_) => {
+            // Insert file record into database
+            let insert_result = sqlx::query(
+                "INSERT INTO File (file_name, sha256_hash) VALUES ($1, $2) RETURNING file_id",
+            )
+            .bind(&req_body.filename)
+            .bind("") // Placeholder hash, will be updated by worker
+            .fetch_one(db_pool.get_ref())
+            .await;
+
+            match insert_result {
+                Ok(row) => {
+                    let file_id: i32 = row.get("file_id");
+
+                    // Schedule deduplication job
+                    if let Ok(job_queue) = JobQueue::new(&config.redis_url) {
+                        let job = JobQueue::create_deduplication_job(
+                            file_id,
+                            req_body.filename.clone(),
+                            format!("/tmp/{}", req_body.filename), // Placeholder path
+                            key,
+                        );
+
+                        match job_queue.enqueue_deduplication_job(job).await {
+                            Ok(job_id) => {
+                                log::info!(
+                                    "Scheduled deduplication job {} for file_id {}",
+                                    job_id,
+                                    file_id
+                                );
+                            }
+                            Err(e) => {
+                                log::error!("Failed to schedule deduplication job: {}", e);
+                            }
+                        }
+                    }
+
+                    HttpResponse::Ok().json(serde_json::json!({
+                        "message": "Upload completed successfully",
+                        "file_id": file_id
+                    }))
+                }
+                Err(e) => {
+                    log::error!("Failed to insert file record: {}", e);
+                    HttpResponse::InternalServerError().json("Error saving file record")
+                }
+            }
+        }
         Err(_) => HttpResponse::InternalServerError().json("Error completing multipart upload"),
     }
 }

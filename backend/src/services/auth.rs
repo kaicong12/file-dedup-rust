@@ -63,8 +63,7 @@ pub async fn create_user_account(
     Ok(())
 }
 
-pub fn verify_jwt_token(token: &str) -> Result<Claims, AuthError> {
-    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT Secret must be specified");
+pub fn verify_jwt_token(token: &str, jwt_secret: &str) -> Result<Claims, AuthError> {
     let key: Hmac<Sha256> =
         Hmac::new_from_slice(jwt_secret.as_bytes()).map_err(|_| AuthError::InvalidToken)?;
 
@@ -75,14 +74,13 @@ pub fn verify_jwt_token(token: &str) -> Result<Claims, AuthError> {
     Ok(claims)
 }
 
-pub fn generate_jwt_token(username: &str) -> Result<String, AuthError> {
+pub fn generate_jwt_token(username: &str, jwt_secret: &str) -> Result<String, AuthError> {
     let claims = Claims {
         username: username.to_string(),
         issued_at: Utc::now(),
         expiration: 180,
     };
 
-    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT Secret must be specified");
     let key: Hmac<Sha256> =
         Hmac::new_from_slice(jwt_secret.as_bytes()).map_err(|_| AuthError::TokenGeneration)?;
 
@@ -101,14 +99,15 @@ mod tests {
     #[test]
     fn test_generate_jwt_token_success() {
         dotenv().ok();
+        let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set for tests");
 
         let username = String::from("KaiCong");
-        let token = generate_jwt_token(&username);
+        let token = generate_jwt_token(&username, &jwt_secret);
         assert!(token.is_ok());
 
         let token = token.unwrap();
         let token_str = token.as_str();
-        let claim_result = verify_jwt_token(token_str);
+        let claim_result = verify_jwt_token(token_str, &jwt_secret);
         assert!(claim_result.is_ok());
 
         let verified_claim = claim_result.unwrap();

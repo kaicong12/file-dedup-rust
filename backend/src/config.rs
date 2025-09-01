@@ -7,6 +7,9 @@ pub struct Config {
     pub aws_profile_name: String,
     pub s3_bucket_name: String,
     pub s3_document_prefix: String,
+    pub redis_url: String,
+    pub opensearch_url: String,
+    pub bedrock_model_id: String,
 }
 
 impl Config {

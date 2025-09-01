@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::services::auth::{AuthError, authenticate_user, generate_jwt_token};
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,7 @@ struct SuccessResponse {
 pub async fn login(
     req_body: web::Json<LoginRequestBody>,
     pool: web::Data<PgPool>,
+    config: web::Data<Config>,
 ) -> impl Responder {
     let email = &req_body.email;
     let password = &req_body.password;
@@ -36,7 +38,7 @@ pub async fn login(
     // 3. This endpoint will only be hit if JWT is expired
     match authenticate_user(&pool, email, password).await {
         Ok(true) => {
-            let token_result = generate_jwt_token(email);
+            let token_result = generate_jwt_token(email, &config.jwt_secret);
             match token_result {
                 Ok(token) => {
                     let success_response = SuccessResponse {

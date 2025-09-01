@@ -14,6 +14,7 @@ use handlers::auth::{login, register_user};
 use handlers::files::{complete_upload, generate_presigned_url, initiate_upload};
 use handlers::health::health_check;
 use middleware::Auth;
+use worker::spawn_worker_process;
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,6 +32,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sqlx::migrate!("./src/migrations").run(&pool).await?;
 
+    // Start the worker process
+    let worker_handle = spawn_worker_process(
+        pool.clone(),
+        env_variables.redis_url.clone(),
+        env_variables.opensearch_url.clone(),
+        env_variables.aws_profile_name.clone(),
+        env_variables.bedrock_model_id.clone(),
+    )
+    .await?;
+
+    log::info!("Worker process started");
+
     HttpServer::new(move || {
         App::new()
             .wrap(
@@ -47,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(register_user)
             .service(
                 web::scope("")
-                    .wrap(Auth)
+                    .wrap(Auth::new(env_variables.jwt_secret.clone()))
                     .service(initiate_upload)
                     .service(complete_upload)
                     .service(generate_presigned_url),
