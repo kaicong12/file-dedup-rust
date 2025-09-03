@@ -8,7 +8,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 
 - **Secure Authentication**: JWT tokens with proper session management
 - **Real-time Updates**: WebSocket connections for job status notifications
-- **File Upload Interface**: Drag-and-drop with progress tracking
 - **Result Visualization**: Interactive displays of deduplication results
 - **Client-side Security**: Rate limiting and input validation
 
@@ -16,7 +15,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 
 - **Async Architecture**: Built on Actix-web for high performance
 - **Job Queue System**: Redis-powered queue for long-running tasks
-- **Database**: PostgreSQL with row-level security (RLS)
 - **Deduplication Engine**: SHA-256 hashing + OpenSearch based for near duplication
 - **Multi-tenancy**: Complete user isolation and data security
 
@@ -26,21 +24,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 
 - **JWT Authentication**: Secure token generation and validation
 - **Password Security**: bcrypt hashing with salt
-- **Rate Limiting**:
-  - 10 API calls/minute
-  - 5 authentication attempts/minute
-  - 2 file uploads/minute
-
-### Input Validation & Protection
-
-- **File Validation**:
-  - Strict MIME type checking
-  - 100MB per file limit
-  - 1000 files per job maximum
-- **Security Scanning**:
-  - Filename sanitization (prevents path traversal)
-  - Basic malware detection (ClamAV extensible)
-- **SQL Protection**: Parameterized queries prevent injection attacks
 
 ### Infrastructure Security
 
@@ -108,13 +91,6 @@ A production-ready file deduplication system built with Rust and React, featurin
   - Malware detection events
 - **Visualization**: Grafana dashboards with configurable alerts
 
-### Backup & Recovery
-
-- **Database Backups**: Automated daily PostgreSQL dumps
-- **Off-site Storage**: S3 integration for backup retention
-- **File Protection**: Upload backup and versioning
-- **Disaster Recovery**: Complete restoration procedures
-
 ## 🚀 Key Features
 
 | Feature                      | Description                                                |
@@ -128,25 +104,62 @@ A production-ready file deduplication system built with Rust and React, featurin
 | **Rate Limiting**            | Multi-level protection against abuse and DoS attacks       |
 | **Comprehensive Monitoring** | Full metrics collection and alerting system                |
 
-## 📊 Production Monitoring
+## 📊 Observability & Monitoring
 
-The system includes a complete observability stack:
+The system includes a comprehensive observability stack using OpenTelemetry, Prometheus, Grafana, and Loki:
 
-### Monitoring Components
+### 🚀 Quick Start with Observability
 
-- **Prometheus**: Metrics collection and storage
-- **Grafana**: Visualization and alerting dashboard
-- **Fluentd**: Centralized log aggregation
-- **Health Checks**: Automated service monitoring
-- **Alert Rules**: Configurable thresholds for critical issues
+```bash
+# Start the complete stack with observability
+./start-observability.sh
 
-### Key Metrics Tracked
+# Or manually with docker-compose
+docker-compose up -d
+```
 
-- Application performance and error rates
-- System resource utilization
-- Security events and anomalies
-- User activity and system usage patterns
+### 📈 Monitoring Components
 
----
+- **OpenTelemetry Collector**: Receives and processes telemetry data (metrics, logs, traces)
+- **Prometheus**: Time-series database for metrics storage and alerting
+- **Grafana**: Rich visualization dashboards and alerting (http://localhost:3001)
+- **Loki**: Log aggregation and querying system
+- **Promtail**: Log collection agent for Docker containers and system logs
 
-_For detailed setup instructions, configuration options, and troubleshooting guides, see the documentation in the `/docs` directory._
+### 🎯 Key Metrics Available
+
+#### Application Metrics
+
+- `http_requests_total` - HTTP requests by method, status, endpoint
+- `http_request_duration_seconds` - Request latency histograms
+- `files_processed_total` - Files processed for deduplication
+- `duplicates_found_total` - Duplicate files identified
+- `deduplication_duration_seconds` - Processing time metrics
+- `active_deduplication_jobs` - Current job queue depth
+- `storage_bytes_saved_total` - Storage efficiency metrics
+
+#### System Metrics
+
+- CPU and memory utilization
+- Database connection pool status
+- Redis queue metrics
+- Container health and resource usage
+
+### 📊 Access Points
+
+- **Grafana Dashboard**: http://localhost:3001 (admin/admin)
+- **Prometheus UI**: http://localhost:9090
+- **Application Metrics**: http://localhost:8080/metrics
+- **Pre-built Dashboard**: "File Deduplication Service Dashboard" in Grafana
+
+### 🔧 Configuration
+
+All observability configuration is located in the `observability/` directory:
+
+- Prometheus scraping configuration
+- Grafana datasources and dashboards
+- OpenTelemetry Collector pipelines
+- Loki log aggregation rules
+- Promtail log collection patterns
+
+See `observability/README.md` for detailed configuration and customization options.

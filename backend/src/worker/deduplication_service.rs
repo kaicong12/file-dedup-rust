@@ -1,3 +1,4 @@
+use crate::observability::FileDeduplicationMetrics;
 use crate::worker::deduplicator::Deduplicator;
 use crate::worker::job_queue::{DeduplicationJob, JobQueue};
 use anyhow::Result;
@@ -5,6 +6,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
+use std::rc::Rc;
+use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SimilarFile {
@@ -30,6 +33,7 @@ pub struct DeduplicationService {
     opensearch_url: String,
     aws_profile: String,
     bedrock_model_id: String,
+    metrics: Option<Rc<FileDeduplicationMetrics>>,
 }
 
 impl DeduplicationService {
@@ -49,6 +53,28 @@ impl DeduplicationService {
             opensearch_url,
             aws_profile,
             bedrock_model_id,
+            metrics: None,
+        }
+    }
+
+    pub fn with_metrics(
+        db_pool: PgPool,
+        job_queue: JobQueue,
+        opensearch_url: String,
+        aws_profile: String,
+        bedrock_model_id: String,
+        metrics: Rc<FileDeduplicationMetrics>,
+    ) -> Self {
+        let opensearch_client = Client::new();
+
+        Self {
+            db_pool,
+            job_queue,
+            opensearch_client,
+            opensearch_url,
+            aws_profile,
+            bedrock_model_id,
+            metrics: Some(metrics),
         }
     }
 
@@ -63,13 +89,44 @@ impl DeduplicationService {
     pub async fn process_deduplication_job(&self, job: DeduplicationJob) -> Result<()> {
         log::info!("Processing deduplication job: {}", job.job_id);
 
+        let start_time = Instant::now();
+
         match self.perform_deduplication(&job).await {
             Ok(result) => {
+                let duration = start_time.elapsed();
+
+                // Collect metrics if available
+                if let Some(metrics) = &self.metrics {
+                    // Record processing duration
+                    metrics
+                        .deduplication_duration_seconds
+                        .observe(duration.as_secs_f64());
+
+                    // Record duplicates found
+                    if !result.exact_duplicates.is_empty() || !result.similar_files.is_empty() {
+                        metrics.duplicates_found_total.inc_by(
+                            (result.exact_duplicates.len() + result.similar_files.len()) as u64,
+                        );
+                    }
+
+                    // Estimate storage saved (placeholder calculation)
+                    // In a real implementation, you'd calculate actual file sizes
+                    let estimated_file_size = 1024 * 1024; // 1MB placeholder
+                    let storage_saved = estimated_file_size * result.exact_duplicates.len() as u64;
+                    if storage_saved > 0 {
+                        metrics.storage_bytes_saved.inc_by(storage_saved);
+                    }
+
+                    // Decrement active jobs counter
+                    metrics.active_jobs.dec();
+                }
+
                 log::info!(
-                    "Deduplication completed for file_id: {}, found {} exact duplicates, {} similar files",
+                    "Deduplication completed for file_id: {}, found {} exact duplicates, {} similar files in {:.2}s",
                     job.file_id,
                     result.exact_duplicates.len(),
-                    result.similar_files.len()
+                    result.similar_files.len(),
+                    duration.as_secs_f64()
                 );
 
                 self.job_queue
@@ -77,6 +134,11 @@ impl DeduplicationService {
                     .await?;
             }
             Err(e) => {
+                // Decrement active jobs counter on failure too
+                if let Some(metrics) = &self.metrics {
+                    metrics.active_jobs.dec();
+                }
+
                 log::error!("Deduplication failed for job {}: {}", job.job_id, e);
                 self.job_queue
                     .update_job_status(&job.job_id, "failed", Some(e.to_string()))
