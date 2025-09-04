@@ -26,9 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Starting HTTP server at http://localhost:8080");
 
     // Initialize observability (tracing and metrics)
-    println!("Before the function");
     init_observability()?;
-    println!("After the fuciton");
 
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 

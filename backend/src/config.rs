@@ -10,6 +10,7 @@ pub struct Config {
     pub redis_url: String,
     pub opensearch_url: String,
     pub bedrock_model_id: String,
+    pub otel_exporter_otlp_endpoint: String,
 }
 
 impl Config {

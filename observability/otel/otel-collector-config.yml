@@ -34,37 +34,15 @@ exporters:
     resource_to_telemetry_conversion:
       enabled: true
 
-  # Export logs to Loki via OTLP HTTP
-  otlphttp/loki:
-    endpoint: http://loki:3100/otlp/v1/logs
-    headers:
-      "Content-Type": "application/x-protobuf"
-
-  # Export traces to Jaeger (optional - can be added later)
-  # jaeger:
-  #   endpoint: jaeger:14250
-  #   tls:
-  #     insecure: true
-
   # Debug exporter for debugging (replaces deprecated logging exporter)
   debug:
     verbosity: detailed
 
 service:
   pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [debug]
-
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
       exporters: [prometheus, debug]
-
-    logs:
-      receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [otlphttp/loki, debug]
 
   extensions: []

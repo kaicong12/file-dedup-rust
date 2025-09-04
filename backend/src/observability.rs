@@ -70,7 +70,7 @@ fn init_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .build()?;
 
     let meter_provider = SdkMeterProvider::builder()
-        .with_periodic_exporter(exporter)
+        .with_periodic_exporter(exporter) // default interval is 60s
         .with_resource(
             Resource::builder()
                 .with_service_name("file-dedup-backend")
