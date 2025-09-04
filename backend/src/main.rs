@@ -1,6 +1,7 @@
 mod config;
 mod database;
 mod handlers;
+mod metrics;
 mod middleware;
 mod observability;
 mod services;
@@ -9,11 +10,13 @@ mod worker;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use sqlx::PgPool;
+use std::sync::Arc;
 
 use env_logger;
 use handlers::auth::{login, register_user};
 use handlers::files::{complete_upload, generate_presigned_url, initiate_upload};
-use handlers::health::health_check;
+use handlers::health::{health_check, metrics_test};
+use metrics::{BusinessMetrics, DeduplicationMetrics};
 use middleware::Auth;
 use observability::init_observability;
 use worker::spawn_worker_process;
@@ -23,7 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Starting HTTP server at http://localhost:8080");
 
     // Initialize observability (tracing and metrics)
+    println!("Before the function");
     init_observability()?;
+    println!("After the fuciton");
 
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
@@ -37,6 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     sqlx::migrate!("./src/migrations").run(&pool).await?;
 
+    // Initialize metrics
+    let dedup_metrics = Arc::new(DeduplicationMetrics::new());
+    let business_metrics = Arc::new(BusinessMetrics::new());
+
+    log::info!("📊 Metrics system initialized");
+
     // Start the worker process
     spawn_worker_process(
         pool.clone(),
@@ -49,6 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     log::info!("Worker process started");
 
+    let dedup_metrics_clone = dedup_metrics.clone();
+    dedup_metrics.record_file_processed("image", 233);
+    let business_metrics_clone = business_metrics.clone();
+
     HttpServer::new(move || {
         App::new()
             .wrap(
@@ -60,7 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             )
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(env_variables.clone()))
+            .app_data(web::Data::new(dedup_metrics_clone.clone()))
+            .app_data(web::Data::new(business_metrics_clone.clone()))
             .service(health_check)
+            .service(metrics_test)
             .service(login)
             .service(register_user)
             .service(

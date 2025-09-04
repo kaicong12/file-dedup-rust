@@ -6,15 +6,6 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
-  # Prometheus receiver to scrape metrics from applications
-  prometheus:
-    config:
-      scrape_configs:
-        - job_name: "otel-collector"
-          scrape_interval: 10s
-          static_configs:
-            - targets: ["0.0.0.0:8888"]
-
 processors:
   batch:
     timeout: 1s
@@ -23,6 +14,7 @@ processors:
 
   memory_limiter:
     limit_mib: 512
+    check_interval: 1s
 
   resource:
     attributes:
@@ -34,21 +26,19 @@ processors:
         action: upsert
 
 exporters:
-  # Export metrics to Prometheus
+  # Export metrics to Prometheus via HTTP endpoint (pull-based)
   prometheus:
     endpoint: "0.0.0.0:8889"
     const_labels:
-      environment: "development"
+      service: "file-dedup-otel-collector"
+    resource_to_telemetry_conversion:
+      enabled: true
 
-  # Export logs to Loki
-  loki:
-    endpoint: http://loki:3100/loki/api/v1/push
-    labels:
-      attributes:
-        service.name: "service_name"
-        service.version: "service_version"
-      resource:
-        container.name: "container_name"
+  # Export logs to Loki via OTLP HTTP
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp/v1/logs
+    headers:
+      "Content-Type": "application/x-protobuf"
 
   # Export traces to Jaeger (optional - can be added later)
   # jaeger:
@@ -56,25 +46,25 @@ exporters:
   #   tls:
   #     insecure: true
 
-  # Logging exporter for debugging
-  logging:
-    loglevel: debug
+  # Debug exporter for debugging (replaces deprecated logging exporter)
+  debug:
+    verbosity: detailed
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [logging]
+      exporters: [debug]
 
     metrics:
-      receivers: [otlp, prometheus]
+      receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [prometheus, logging]
+      exporters: [prometheus, debug]
 
     logs:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [loki, logging]
+      exporters: [otlphttp/loki, debug]
 
   extensions: []

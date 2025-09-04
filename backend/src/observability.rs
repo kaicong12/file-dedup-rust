@@ -60,7 +60,7 @@ pub fn init_observability() -> Result<(), Box<dyn std::error::Error + Send + Syn
 
 fn init_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| "http://otel-collector:4317".to_string());
+        .unwrap_or_else(|_| "http://otel-collector:4318".to_string());
 
     // Create OTLP metrics exporter
     let exporter = opentelemetry_otlp::MetricExporter::builder()

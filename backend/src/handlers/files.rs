@@ -1,9 +1,21 @@
 use crate::config::Config;
+use crate::metrics::DeduplicationMetrics;
 use crate::services::files::{MultipartUploadParams, S3Client};
 use crate::worker::JobQueue;
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
+use std::sync::Arc;
+
+/// Helper function to determine if a file is an image based on its extension
+fn is_image_file(file_name: &str) -> bool {
+    let image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
+    if let Some(extension) = file_name.split('.').last() {
+        image_extensions.contains(&extension.to_lowercase().as_str())
+    } else {
+        false
+    }
+}
 
 #[derive(Deserialize)]
 struct InitializeUploadRequest {
@@ -58,9 +70,13 @@ pub async fn complete_upload(
     req_body: web::Json<CompleteUploadRequest>,
     config: web::Data<Config>,
     db_pool: web::Data<PgPool>,
+    metrics: web::Data<Arc<DeduplicationMetrics>>,
 ) -> impl Responder {
     let s3_client = S3Client::new(&config.aws_profile_name).await;
     let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
+
+    // Start timing S3 operation
+    let s3_timer = crate::metrics::MetricsTimer::new("s3_complete_upload".to_string());
 
     let complete_result = s3_client
         .complete_multipart_upload(
@@ -73,6 +89,16 @@ pub async fn complete_upload(
 
     match complete_result {
         Ok(_) => {
+            // Record successful S3 operation
+            s3_timer.finish_s3(&metrics, "complete_multipart_upload");
+
+            // Determine file type for metrics
+            let file_type = if is_image_file(&req_body.filename) {
+                "image"
+            } else {
+                "text"
+            };
+
             // Insert file record into database
             let insert_result = sqlx::query(
                 "INSERT INTO File (file_name, sha256_hash) VALUES ($1, $2) RETURNING file_id",
@@ -85,6 +111,9 @@ pub async fn complete_upload(
             match insert_result {
                 Ok(row) => {
                     let file_id: i32 = row.get("file_id");
+
+                    // Record file upload metrics
+                    metrics.record_file_processed(file_type, 0); // File size unknown for now
 
                     // Schedule deduplication job
                     if let Ok(job_queue) = JobQueue::new(&config.redis_url) {
@@ -120,7 +149,11 @@ pub async fn complete_upload(
                 }
             }
         }
-        Err(_) => HttpResponse::InternalServerError().json("Error completing multipart upload"),
+        Err(_) => {
+            // Record S3 error
+            metrics.record_s3_error("complete_multipart_upload");
+            HttpResponse::InternalServerError().json("Error completing multipart upload")
+        }
     }
 }
 

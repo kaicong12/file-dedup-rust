@@ -1,3 +1,4 @@
+use crate::metrics::{DeduplicationMetrics, MetricsTimer};
 use crate::worker::deduplicator::Deduplicator;
 use crate::worker::job_queue::{DeduplicationJob, JobQueue};
 use anyhow::Result;
@@ -5,7 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +33,7 @@ pub struct DeduplicationService {
     opensearch_url: String,
     aws_profile: String,
     bedrock_model_id: String,
+    metrics: Arc<DeduplicationMetrics>,
 }
 
 impl DeduplicationService {
@@ -43,6 +45,7 @@ impl DeduplicationService {
         bedrock_model_id: String,
     ) -> Self {
         let opensearch_client = Client::new();
+        let metrics = Arc::new(DeduplicationMetrics::new());
 
         Self {
             db_pool,
@@ -51,6 +54,7 @@ impl DeduplicationService {
             opensearch_url,
             aws_profile,
             bedrock_model_id,
+            metrics,
         }
     }
 
@@ -60,6 +64,7 @@ impl DeduplicationService {
         opensearch_url: String,
         aws_profile: String,
         bedrock_model_id: String,
+        metrics: Arc<DeduplicationMetrics>,
     ) -> Self {
         let opensearch_client = Client::new();
 
@@ -70,6 +75,7 @@ impl DeduplicationService {
             opensearch_url,
             aws_profile,
             bedrock_model_id,
+            metrics,
         }
     }
 
@@ -84,11 +90,39 @@ impl DeduplicationService {
     pub async fn process_deduplication_job(&self, job: DeduplicationJob) -> Result<()> {
         log::info!("Processing deduplication job: {}", job.job_id);
 
+        // Record that we started processing a file
+        let file_type = if self.is_image_file(&job.file_name) {
+            "image"
+        } else {
+            "text"
+        };
+        self.metrics.record_file_processed(file_type, 0); // File size unknown for now
+
+        let timer = crate::metrics::MetricsTimer::new("deduplication".to_string());
         let start_time = Instant::now();
 
         match self.perform_deduplication(&job).await {
             Ok(result) => {
                 let duration = start_time.elapsed();
+                timer.finish_deduplication(&self.metrics, "full_deduplication");
+
+                // Record duplicates found
+                let total_duplicates = result.exact_duplicates.len() + result.similar_files.len();
+                if total_duplicates > 0 {
+                    self.metrics
+                        .record_duplicates_found(total_duplicates as u64, 0); // Storage saved unknown for now
+                }
+
+                // Record cluster creation
+                if result.cluster_id.is_some() {
+                    self.metrics.record_cluster_created();
+                }
+
+                // Record similarity scores
+                for similar_file in &result.similar_files {
+                    self.metrics
+                        .record_similarity_score(similar_file.similarity_score);
+                }
 
                 log::info!(
                     "Deduplication completed for file_id: {}, found {} exact duplicates, {} similar files in {:.2}s",
@@ -103,6 +137,9 @@ impl DeduplicationService {
                     .await?;
             }
             Err(e) => {
+                // Record error
+                self.metrics.record_job_failure("deduplication_error");
+
                 log::error!("Deduplication failed for job {}: {}", job.job_id, e);
                 self.job_queue
                     .update_job_status(&job.job_id, "failed", Some(e.to_string()))
