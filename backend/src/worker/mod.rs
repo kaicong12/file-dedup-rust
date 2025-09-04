@@ -6,4 +6,4 @@ pub mod worker_process;
 pub use deduplication_service::{DeduplicationResult, DeduplicationService, SimilarFile};
 pub use deduplicator::Deduplicator;
 pub use job_queue::{DeduplicationJob, JobQueue, JobStatus};
-pub use worker_process::{WorkerProcess, spawn_worker_process};
+pub use worker_process::spawn_worker_process;

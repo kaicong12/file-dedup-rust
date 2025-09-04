@@ -1,12 +1,9 @@
 use crate::config::Config;
-use crate::observability::FileDeduplicationMetrics;
 use crate::services::files::{MultipartUploadParams, S3Client};
 use crate::worker::JobQueue;
 use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
-use std::rc::Rc;
-use std::time::Instant;
 
 #[derive(Deserialize)]
 struct InitializeUploadRequest {
@@ -61,7 +58,6 @@ pub async fn complete_upload(
     req_body: web::Json<CompleteUploadRequest>,
     config: web::Data<Config>,
     db_pool: web::Data<PgPool>,
-    metrics: web::Data<Rc<FileDeduplicationMetrics>>,
 ) -> impl Responder {
     let s3_client = S3Client::new(&config.aws_profile_name).await;
     let key = format!("{}/{}", config.s3_document_prefix, req_body.filename);
@@ -101,12 +97,6 @@ pub async fn complete_upload(
 
                         match job_queue.enqueue_deduplication_job(job).await {
                             Ok(job_id) => {
-                                // Increment files processed metric
-                                metrics.files_processed_total.inc();
-
-                                // Increment active jobs metric
-                                metrics.active_jobs.inc();
-
                                 log::info!(
                                     "Scheduled deduplication job {} for file_id {}",
                                     job_id,

@@ -67,7 +67,7 @@ This directory contains the complete observability setup using OpenTelemetry (OT
 docker-compose up -d
 
 # Or start only observability services
-docker-compose up -d prometheus grafana loki promtail otel-collector
+docker-compose up -d grafana loki promtail otel-collector
 ```
 
 ### 2. Access the Dashboards
