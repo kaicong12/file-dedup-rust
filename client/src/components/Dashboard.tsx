@@ -13,39 +13,12 @@ import {
   Download,
 } from "lucide-react";
 import MultipartUpload from "./MultipartUpload";
+import { Job } from "@/app/type";
 
 interface Notification {
   id: number;
   type: "success" | "error" | "info";
   message: string;
-}
-
-interface FileInfo {
-  name: string;
-  size: number;
-  hash?: string;
-}
-
-interface DuplicateGroup {
-  files: FileInfo[];
-  wasted_space: number;
-}
-
-interface JobResults {
-  duplicate_groups: DuplicateGroup[];
-  total_files: number;
-  wasted_space: number;
-}
-
-interface Job {
-  id: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  created_at: string;
-  total_files?: number;
-  duplicate_groups?: number;
-  wasted_space?: number;
-  progress?: number;
-  results?: JobResults;
 }
 
 interface UploadResult {
@@ -255,7 +228,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="space-y-4">
             {jobs.map((job) => (
               <div
-                key={job.id}
+                key={job.job_id}
                 className="border border-gray-200 rounded-lg p-4"
               >
                 <div className="flex justify-between items-start mb-3">
@@ -263,7 +236,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {getStatusIcon(job.status)}
                     <div>
                       <h3 className="font-medium text-gray-800">
-                        Job #{job.id}
+                        Job #{job.job_id}
                       </h3>
                       <p className="text-sm text-gray-500">
                         Created: {new Date(job.created_at).toLocaleString()}
@@ -274,7 +247,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {job.status === "completed" && (
                       <>
                         <button
-                          onClick={() => onDownloadResults(job.id)}
+                          onClick={() => onDownloadResults(job.job_id)}
                           className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 flex items-center gap-1"
                         >
                           <Download size={14} />
@@ -283,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <button
                           onClick={() =>
                             onSetCurrentJob(
-                              currentJob?.id === job.id ? null : job
+                              currentJob?.job_id === job.job_id ? null : job
                             )
                           }
                           className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 flex items-center gap-1"
@@ -294,7 +267,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </>
                     )}
                     <button
-                      onClick={() => onDeleteJob(job.id)}
+                      onClick={() => onDeleteJob(job.job_id)}
                       className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 flex items-center gap-1"
                     >
                       <Trash2 size={14} />
@@ -347,7 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 )}
 
-                {currentJob?.id === job.id &&
+                {currentJob?.job_id === job.job_id &&
                   job.status === "completed" &&
                   job.results && (
                     <div className="mt-4 p-4 bg-gray-50 rounded-lg">
@@ -356,7 +329,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </h4>
                       {job.results.duplicate_groups?.map((group, index) => (
                         <div
-                          key={`group-${job.id}-${index}`}
+                          key={`group-${job.job_id}-${index}`}
                           className="mb-3 p-3 bg-white rounded border"
                         >
                           <div className="flex justify-between items-center mb-2">
@@ -371,7 +344,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           <div className="space-y-1">
                             {group.files?.slice(0, 3).map((file, fileIndex) => (
                               <div
-                                key={`file-${job.id}-${index}-${fileIndex}-${file.name}`}
+                                key={`file-${job.job_id}-${index}-${fileIndex}-${file.name}`}
                                 className="text-sm text-gray-600 flex items-center gap-2"
                               >
                                 <FileText size={14} />

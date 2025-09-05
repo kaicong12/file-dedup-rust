@@ -16,7 +16,7 @@ use env_logger;
 use handlers::auth::{login, register_user};
 use handlers::files::{complete_upload, generate_presigned_url, initiate_upload};
 use handlers::health::{health_check, metrics_test};
-use handlers::jobs::{get_job_by_id, get_jobs};
+use handlers::jobs::{delete_job, get_job_by_id, get_jobs};
 use handlers::websocket::{ConnectionManager, websocket_handler};
 use metrics::{BusinessMetrics, DeduplicationMetrics};
 use middleware::Auth;
@@ -102,7 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     .service(complete_upload)
                     .service(generate_presigned_url)
                     .service(get_jobs)
-                    .service(get_job_by_id),
+                    .service(get_job_by_id)
+                    .service(delete_job),
             )
             // enable logger - always register Actix Web Logger middleware last
             .wrap(Logger::default())

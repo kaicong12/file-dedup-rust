@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, get, web};
+use actix_web::{HttpResponse, Responder, delete, get, web};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -86,6 +86,8 @@ pub async fn get_jobs(query: web::Query<JobsQuery>, db_pool: web::Data<PgPool>) 
 pub async fn get_job_by_id(path: web::Path<Uuid>, db_pool: web::Data<PgPool>) -> impl Responder {
     let job_id = path.into_inner();
 
+    println!("Job id: {job_id:?}");
+
     match sqlx::query(
         "SELECT job_id, file_id, file_name, file_path, s3_key, status, error_message, created_at, updated_at, completed_at 
          FROM jobs WHERE job_id = $1"
@@ -114,6 +116,51 @@ pub async fn get_job_by_id(path: web::Path<Uuid>, db_pool: web::Data<PgPool>) ->
         Err(e) => {
             log::error!("Failed to fetch job {}: {}", job_id, e);
             HttpResponse::InternalServerError().json("Failed to fetch job")
+        }
+    }
+}
+
+#[delete("/jobs/{job_id}")]
+pub async fn delete_job(path: web::Path<Uuid>, db_pool: web::Data<PgPool>) -> impl Responder {
+    let job_id = path.into_inner();
+
+    // First check if the job exists
+    match sqlx::query("SELECT job_id FROM jobs WHERE job_id = $1")
+        .bind(job_id)
+        .fetch_optional(db_pool.get_ref())
+        .await
+    {
+        Ok(Some(_)) => {
+            // Job exists, proceed with deletion
+            match sqlx::query("DELETE FROM jobs WHERE job_id = $1")
+                .bind(job_id)
+                .execute(db_pool.get_ref())
+                .await
+            {
+                Ok(result) => {
+                    if result.rows_affected() > 0 {
+                        log::info!("Successfully deleted job {}", job_id);
+                        HttpResponse::Ok().json(serde_json::json!({
+                            "message": "Job deleted successfully",
+                            "job_id": job_id
+                        }))
+                    } else {
+                        HttpResponse::InternalServerError().json("Failed to delete job")
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to delete job {}: {}", job_id, e);
+                    HttpResponse::InternalServerError().json("Failed to delete job")
+                }
+            }
+        }
+        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Job not found",
+            "job_id": job_id
+        })),
+        Err(e) => {
+            log::error!("Failed to check job existence {}: {}", job_id, e);
+            HttpResponse::InternalServerError().json("Failed to check job")
         }
     }
 }

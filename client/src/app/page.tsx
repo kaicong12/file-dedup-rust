@@ -4,39 +4,12 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import LoginForm from "../components/LoginForm";
 import Dashboard from "../components/Dashboard";
 import { useAuth } from "../contexts/AuthContext";
+import { Job } from "./type";
 
 interface Notification {
   id: number;
   type: "success" | "error" | "info";
   message: string;
-}
-
-interface FileInfo {
-  name: string;
-  size: number;
-  hash?: string;
-}
-
-interface DuplicateGroup {
-  files: FileInfo[];
-  wasted_space: number;
-}
-
-interface JobResults {
-  duplicate_groups: DuplicateGroup[];
-  total_files: number;
-  wasted_space: number;
-}
-
-interface Job {
-  id: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  created_at: string;
-  total_files?: number;
-  duplicate_groups?: number;
-  wasted_space?: number;
-  progress?: number;
-  results?: JobResults;
 }
 
 interface WebSocketMessage {
@@ -90,7 +63,7 @@ const FileDeduplicationSystem = () => {
           // Update job status in the jobs list
           setJobs((prev) =>
             prev.map((job) =>
-              job.id === data.job_id ? { ...job, ...data.status } : job
+              job.job_id === data.job_id ? { ...job, ...data.status } : job
             )
           );
 
@@ -127,7 +100,7 @@ const FileDeduplicationSystem = () => {
         case "job_pending":
           setJobs((prev) =>
             prev.map((job) =>
-              job.id === data.job_id ? { ...job, status: "pending" } : job
+              job.job_id === data.job_id ? { ...job, status: "pending" } : job
             )
           );
           addNotification(
@@ -138,7 +111,9 @@ const FileDeduplicationSystem = () => {
         case "job_processing":
           setJobs((prev) =>
             prev.map((job) =>
-              job.id === data.job_id ? { ...job, status: "processing" } : job
+              job.job_id === data.job_id
+                ? { ...job, status: "processing" }
+                : job
             )
           );
           addNotification("info", `Job ${data.job_id} is now being processed`);
@@ -146,7 +121,7 @@ const FileDeduplicationSystem = () => {
         case "job_completed":
           setJobs((prev) =>
             prev.map((job) =>
-              job.id === data.job_id ? { ...job, status: "completed" } : job
+              job.job_id === data.job_id ? { ...job, status: "completed" } : job
             )
           );
           addNotification(
@@ -158,7 +133,7 @@ const FileDeduplicationSystem = () => {
         case "job_failed":
           setJobs((prev) =>
             prev.map((job) =>
-              job.id === data.job_id ? { ...job, status: "failed" } : job
+              job.job_id === data.job_id ? { ...job, status: "failed" } : job
             )
           );
           addNotification(
@@ -257,7 +232,7 @@ const FileDeduplicationSystem = () => {
       });
 
       if (response.ok) {
-        setJobs((prev) => prev.filter((job) => job.id !== jobId));
+        setJobs((prev) => prev.filter((job) => job.job_id !== jobId));
         addNotification("success", "Job deleted successfully");
       }
     } catch (error) {
