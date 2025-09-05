@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::handlers::jobs::create_job_record;
 use crate::metrics::DeduplicationMetrics;
 use crate::services::files::{MultipartUploadParams, S3Client};
 use crate::worker::JobQueue;
@@ -6,6 +7,7 @@ use actix_web::{HttpResponse, Responder, post, web};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Helper function to determine if a file is an image based on its extension
 fn is_image_file(file_name: &str) -> bool {
@@ -121,16 +123,42 @@ pub async fn complete_upload(
                             file_id,
                             req_body.filename.clone(),
                             format!("/tmp/{}", req_body.filename), // Placeholder path
-                            key,
+                            key.clone(),
                         );
 
-                        match job_queue.enqueue_deduplication_job(job).await {
+                        match job_queue.enqueue_deduplication_job(job.clone()).await {
                             Ok(job_id) => {
+                                // Parse job_id as UUID for database
+                                if let Ok(job_uuid) = Uuid::parse_str(&job_id) {
+                                    // Create job record in database
+                                    if let Err(e) = create_job_record(
+                                        db_pool.get_ref(),
+                                        job_uuid,
+                                        file_id,
+                                        &req_body.filename,
+                                        Some(&format!("/tmp/{}", req_body.filename)),
+                                        &key,
+                                    )
+                                    .await
+                                    {
+                                        log::error!(
+                                            "Failed to create job record in database: {}",
+                                            e
+                                        );
+                                    }
+                                }
+
                                 log::info!(
                                     "Scheduled deduplication job {} for file_id {}",
                                     job_id,
                                     file_id
                                 );
+
+                                return HttpResponse::Ok().json(serde_json::json!({
+                                    "message": "Upload completed successfully",
+                                    "file_id": file_id,
+                                    "job_id": job_id
+                                }));
                             }
                             Err(e) => {
                                 log::error!("Failed to schedule deduplication job: {}", e);
@@ -140,7 +168,8 @@ pub async fn complete_upload(
 
                     HttpResponse::Ok().json(serde_json::json!({
                         "message": "Upload completed successfully",
-                        "file_id": file_id
+                        "file_id": file_id,
+                        "job_id": null
                     }))
                 }
                 Err(e) => {

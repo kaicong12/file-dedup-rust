@@ -10,16 +10,18 @@ mod worker;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use sqlx::PgPool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use env_logger;
 use handlers::auth::{login, register_user};
 use handlers::files::{complete_upload, generate_presigned_url, initiate_upload};
 use handlers::health::{health_check, metrics_test};
+use handlers::jobs::{get_job_by_id, get_jobs};
+use handlers::websocket::{ConnectionManager, websocket_handler};
 use metrics::{BusinessMetrics, DeduplicationMetrics};
 use middleware::Auth;
 use observability::init_observability;
-use worker::spawn_worker_process;
+use worker::{JobQueue, spawn_worker_process};
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -46,6 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     log::info!("📊 Metrics system initialized");
 
+    // Initialize WebSocket connection manager
+    let connection_manager = Arc::new(Mutex::new(ConnectionManager::new()));
+
+    // Initialize job queue for WebSocket
+    let job_queue = JobQueue::new(&env_variables.redis_url).expect("Failed to create job queue");
+
+    log::info!("🔌 WebSocket system initialized");
+
     // Start the worker process
     spawn_worker_process(
         pool.clone(),
@@ -53,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         env_variables.opensearch_url.clone(),
         env_variables.aws_profile_name.clone(),
         env_variables.bedrock_model_id.clone(),
+        Some(connection_manager.clone()),
     )
     .await?;
 
@@ -61,6 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let dedup_metrics_clone = dedup_metrics.clone();
     dedup_metrics.record_file_processed("image", 233);
     let business_metrics_clone = business_metrics.clone();
+    let connection_manager_clone = connection_manager.clone();
+    let job_queue_clone = job_queue.clone();
 
     HttpServer::new(move || {
         App::new()
@@ -75,16 +88,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .app_data(web::Data::new(env_variables.clone()))
             .app_data(web::Data::new(dedup_metrics_clone.clone()))
             .app_data(web::Data::new(business_metrics_clone.clone()))
+            .app_data(web::Data::new(connection_manager_clone.clone()))
+            .app_data(web::Data::new(job_queue_clone.clone()))
             .service(health_check)
             .service(metrics_test)
             .service(login)
             .service(register_user)
+            .route("/ws", web::get().to(websocket_handler))
             .service(
                 web::scope("")
                     .wrap(Auth::new(env_variables.jwt_secret.clone()))
                     .service(initiate_upload)
                     .service(complete_upload)
-                    .service(generate_presigned_url),
+                    .service(generate_presigned_url)
+                    .service(get_jobs)
+                    .service(get_job_by_id),
             )
             // enable logger - always register Actix Web Logger middleware last
             .wrap(Logger::default())

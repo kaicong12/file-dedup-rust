@@ -1,7 +1,9 @@
+use crate::handlers::websocket::ConnectionManager;
 use crate::worker::deduplication_service::DeduplicationService;
 use crate::worker::job_queue::JobQueue;
 use anyhow::Result;
 use sqlx::PgPool;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -19,15 +21,21 @@ impl WorkerProcess {
         aws_profile: String,
         bedrock_model_id: String,
         shutdown_signal: tokio::sync::watch::Receiver<bool>,
+        connection_manager: Option<Arc<Mutex<ConnectionManager>>>,
     ) -> Result<Self> {
         let job_queue = JobQueue::new(&redis_url)?;
-        let deduplication_service = DeduplicationService::new(
+        let mut deduplication_service = DeduplicationService::new(
             db_pool,
             job_queue.clone(),
             opensearch_url,
             aws_profile,
             bedrock_model_id,
         );
+
+        // Set connection manager if provided
+        if let Some(conn_mgr) = connection_manager {
+            deduplication_service.set_connection_manager(conn_mgr);
+        }
 
         Ok(WorkerProcess {
             deduplication_service,
@@ -50,6 +58,15 @@ impl WorkerProcess {
             match self.job_queue.dequeue_job().await {
                 Ok(Some(job)) => {
                     log::info!("Processing job: {}", job.job_id);
+
+                    // Update job status to processing using deduplication service for WebSocket broadcasting
+                    if let Err(e) = self
+                        .deduplication_service
+                        .update_job_status(&job.job_id, "processing", None)
+                        .await
+                    {
+                        log::error!("Failed to update job status to processing: {}", e);
+                    }
 
                     // Process the job
                     if let Err(e) = self
@@ -82,6 +99,7 @@ pub async fn spawn_worker_process(
     opensearch_url: String,
     aws_profile: String,
     bedrock_model_id: String,
+    connection_manager: Option<Arc<Mutex<ConnectionManager>>>,
 ) -> Result<tokio::task::JoinHandle<Result<()>>> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
@@ -92,6 +110,7 @@ pub async fn spawn_worker_process(
         aws_profile,
         bedrock_model_id,
         shutdown_rx,
+        connection_manager,
     )?;
 
     let handle = tokio::spawn(async move { worker.start().await });
@@ -136,6 +155,7 @@ mod tests {
             aws_profile,
             bedrock_model_id,
             shutdown_rx,
+            None, // No connection manager for tests
         );
 
         assert!(worker_result.is_ok());

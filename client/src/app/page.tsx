@@ -40,7 +40,12 @@ interface Job {
 }
 
 interface WebSocketMessage {
-  type: "job_status_update" | "job_completed" | "job_failed";
+  type:
+    | "job_status_update"
+    | "job_completed"
+    | "job_failed"
+    | "job_pending"
+    | "job_processing";
   job_id: string;
   status?: Partial<Job>;
   error?: string;
@@ -70,8 +75,8 @@ const FileDeduplicationSystem = () => {
         },
       });
       if (response.ok) {
-        const jobsData: Job[] = await response.json();
-        setJobs(jobsData);
+        const jobsData: { jobs: Job[] } = await response.json();
+        setJobs(jobsData?.jobs ?? []);
       }
     } catch (error) {
       console.error("Failed to fetch jobs:", error);
@@ -82,23 +87,87 @@ const FileDeduplicationSystem = () => {
     (data: WebSocketMessage): void => {
       switch (data.type) {
         case "job_status_update":
+          // Update job status in the jobs list
           setJobs((prev) =>
             prev.map((job) =>
               job.id === data.job_id ? { ...job, ...data.status } : job
             )
           );
+
+          // Handle specific status updates with notifications
+          if (data.status?.status) {
+            switch (data.status.status) {
+              case "pending":
+                addNotification("info", `Job ${data.job_id} is now pending`);
+                break;
+              case "processing":
+                addNotification(
+                  "info",
+                  `Job ${data.job_id} is now being processed`
+                );
+                break;
+              case "completed":
+                addNotification(
+                  "success",
+                  `Job ${data.job_id} completed successfully`
+                );
+                fetchJobs(); // Refresh to get final results
+                break;
+              case "failed":
+                addNotification(
+                  "error",
+                  `Job ${data.job_id} failed${
+                    data.error ? `: ${data.error}` : ""
+                  }`
+                );
+                break;
+            }
+          }
+          break;
+        case "job_pending":
+          setJobs((prev) =>
+            prev.map((job) =>
+              job.id === data.job_id ? { ...job, status: "pending" } : job
+            )
+          );
+          addNotification(
+            "info",
+            `Job ${data.job_id} has been queued for processing`
+          );
+          break;
+        case "job_processing":
+          setJobs((prev) =>
+            prev.map((job) =>
+              job.id === data.job_id ? { ...job, status: "processing" } : job
+            )
+          );
+          addNotification("info", `Job ${data.job_id} is now being processed`);
           break;
         case "job_completed":
+          setJobs((prev) =>
+            prev.map((job) =>
+              job.id === data.job_id ? { ...job, status: "completed" } : job
+            )
+          );
           addNotification(
             "success",
             `Job ${data.job_id} completed successfully`
           );
-          fetchJobs();
+          fetchJobs(); // Refresh to get final results
           break;
         case "job_failed":
-          addNotification("error", `Job ${data.job_id} failed: ${data.error}`);
+          setJobs((prev) =>
+            prev.map((job) =>
+              job.id === data.job_id ? { ...job, status: "failed" } : job
+            )
+          );
+          addNotification(
+            "error",
+            `Job ${data.job_id} failed${data.error ? `: ${data.error}` : ""}`
+          );
           break;
         default:
+          console.warn("Unknown WebSocket message type:", data.type);
           break;
       }
     },

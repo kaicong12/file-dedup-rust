@@ -14,7 +14,7 @@ pub struct DeduplicationJob {
     pub created_at: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JobStatus {
     pub job_id: String,
     pub status: String, // "pending", "processing", "completed", "failed"
@@ -49,21 +49,8 @@ impl JobQueue {
         // Add to the job queue
         let _: () = conn.lpush("deduplication_jobs", &job_data)?;
 
-        // Store job status
-        let status = JobStatus {
-            job_id: job.job_id.clone(),
-            status: "pending".to_string(),
-            created_at: job.created_at,
-            updated_at: job.created_at,
-            error_message: None,
-        };
-
-        let status_key = format!("job_status:{}", job.job_id);
-        let status_data = serde_json::to_string(&status)?;
-        let _: () = conn.set(&status_key, &status_data)?;
-
-        // Set expiration for job status (24 hours)
-        let _: () = conn.expire(&status_key, 86400)?;
+        // Store job status as pending
+        self.update_job_status(&job.job_id, "pending", None).await?;
 
         log::info!("Enqueued deduplication job: {}", job.job_id);
         Ok(job.job_id)

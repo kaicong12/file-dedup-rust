@@ -9,14 +9,12 @@ A production-ready file deduplication system built with Rust and React, featurin
 - **Secure Authentication**: JWT tokens with proper session management
 - **Real-time Updates**: WebSocket connections for job status notifications
 - **Result Visualization**: Interactive displays of deduplication results
-- **Client-side Security**: Rate limiting and input validation
 
 ### Backend (Rust)
 
 - **Async Architecture**: Built on Actix-web for high performance
 - **Job Queue System**: Redis-powered queue for long-running tasks
 - **Deduplication Engine**: SHA-256 hashing + OpenSearch based for near duplication
-- **Multi-tenancy**: Complete user isolation and data security
 
 ## 🔒 Security Measures
 
@@ -57,24 +55,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 - **Proxy Configuration**: Nginx upstream load balancing
 - **Orchestration**: Docker Compose for container management
 
-## 🐳 Production Deployment
-
-### Docker Infrastructure
-
-- **Optimized Images**: Multi-stage builds for minimal size
-- **Data Persistence**: PostgreSQL with volume mounting
-- **Caching Layer**: Redis for queues and session storage
-- **SSL Termination**: Nginx reverse proxy with HTTPS
-- **Monitoring Stack**: Prometheus and Grafana integration
-
-### Security Hardening
-
-- **Network Security**: Firewall configuration and rules
-- **Certificate Management**: SSL with automatic renewal
-- **Intrusion Detection**: Fail2ban monitoring and response
-- **Security Policies**: Complete CSP and security headers
-- **Resource Controls**: Container limits and quotas
-
 ### Monitoring & Alerting
 
 - **Application Metrics**:
@@ -91,32 +71,9 @@ A production-ready file deduplication system built with Rust and React, featurin
   - Malware detection events
 - **Visualization**: Grafana dashboards with configurable alerts
 
-## 🚀 Key Features
-
-| Feature                      | Description                                                |
-| ---------------------------- | ---------------------------------------------------------- |
-| **Secure File Upload**       | Multi-file upload with comprehensive security scanning     |
-| **Async Processing**         | Non-blocking deduplication jobs with queue management      |
-| **Real-time Updates**        | WebSocket notifications for job progress and completion    |
-| **Multi-tenancy**            | Complete user isolation - users see only their data        |
-| **Storage Management**       | Per-user quotas with automatic cleanup policies            |
-| **Audit Logging**            | Complete audit trail of all user actions and system events |
-| **Rate Limiting**            | Multi-level protection against abuse and DoS attacks       |
-| **Comprehensive Monitoring** | Full metrics collection and alerting system                |
-
 ## 📊 Observability & Monitoring
 
 The system includes a comprehensive observability stack using OpenTelemetry, Prometheus, Grafana, and Loki:
-
-### 🚀 Quick Start with Observability
-
-```bash
-# Start the complete stack with observability
-./start-observability.sh
-
-# Or manually with docker-compose
-docker-compose up -d
-```
 
 ### 📈 Monitoring Components
 

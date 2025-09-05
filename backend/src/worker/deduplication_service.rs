@@ -1,4 +1,6 @@
-use crate::metrics::{DeduplicationMetrics, MetricsTimer};
+use crate::handlers::jobs::update_job_status_in_db;
+use crate::handlers::websocket::ConnectionManager;
+use crate::metrics::DeduplicationMetrics;
 use crate::worker::deduplicator::Deduplicator;
 use crate::worker::job_queue::{DeduplicationJob, JobQueue};
 use anyhow::Result;
@@ -6,8 +8,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SimilarFile {
@@ -34,6 +37,7 @@ pub struct DeduplicationService {
     aws_profile: String,
     bedrock_model_id: String,
     metrics: Arc<DeduplicationMetrics>,
+    connection_manager: Option<Arc<Mutex<ConnectionManager>>>,
 }
 
 impl DeduplicationService {
@@ -55,28 +59,13 @@ impl DeduplicationService {
             aws_profile,
             bedrock_model_id,
             metrics,
+            connection_manager: None,
         }
     }
 
-    pub fn with_metrics(
-        db_pool: PgPool,
-        job_queue: JobQueue,
-        opensearch_url: String,
-        aws_profile: String,
-        bedrock_model_id: String,
-        metrics: Arc<DeduplicationMetrics>,
-    ) -> Self {
-        let opensearch_client = Client::new();
-
-        Self {
-            db_pool,
-            job_queue,
-            opensearch_client,
-            opensearch_url,
-            aws_profile,
-            bedrock_model_id,
-            metrics,
-        }
+    /// Set the WebSocket connection manager for broadcasting job updates
+    pub fn set_connection_manager(&mut self, connection_manager: Arc<Mutex<ConnectionManager>>) {
+        self.connection_manager = Some(connection_manager);
     }
 
     fn get_opensearch_index(&self, file_name: &str) -> String {
@@ -132,8 +121,8 @@ impl DeduplicationService {
                     duration.as_secs_f64()
                 );
 
-                self.job_queue
-                    .update_job_status(&job.job_id, "completed", None)
+                // Update job status in Redis and database
+                self.update_job_status(&job.job_id, "completed", None)
                     .await?;
             }
             Err(e) => {
@@ -141,8 +130,8 @@ impl DeduplicationService {
                 self.metrics.record_job_failure("deduplication_error");
 
                 log::error!("Deduplication failed for job {}: {}", job.job_id, e);
-                self.job_queue
-                    .update_job_status(&job.job_id, "failed", Some(e.to_string()))
+                // Update job status in Redis and database
+                self.update_job_status(&job.job_id, "failed", Some(e.to_string()))
                     .await?;
                 return Err(e);
             }
@@ -449,6 +438,42 @@ impl DeduplicationService {
             .bind(file_id)
             .execute(&self.db_pool)
             .await?;
+
+        Ok(())
+    }
+
+    /// Update job status in Redis, database, and broadcast via WebSocket
+    pub async fn update_job_status(
+        &self,
+        job_id: &str,
+        status: &str,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        // Update status in Redis
+        self.job_queue
+            .update_job_status(job_id, status, error_message.clone())
+            .await?;
+
+        // Update status in database
+        if let Ok(job_uuid) = Uuid::parse_str(job_id) {
+            if let Err(e) =
+                update_job_status_in_db(&self.db_pool, job_uuid, status, error_message.as_deref())
+                    .await
+            {
+                log::error!("Failed to update job status in database: {}", e);
+            }
+        }
+
+        // Broadcast WebSocket update if connection manager is available
+        if let Some(ref connection_manager) = self.connection_manager {
+            // Get the current job status from Redis first
+            if let Ok(Some(job_status)) = self.job_queue.get_job_status(job_id).await {
+                // Then acquire the lock and broadcast
+                if let Ok(manager) = connection_manager.lock() {
+                    manager.broadcast_job_update(job_id, job_status);
+                }
+            }
+        }
 
         Ok(())
     }
