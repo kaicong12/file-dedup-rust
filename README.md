@@ -23,14 +23,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 - **JWT Authentication**: Secure token generation and validation
 - **Password Security**: bcrypt hashing with salt
 
-### Infrastructure Security
-
-- **Transport Security**: HTTPS with TLS 1.2+
-- **Security Headers**: CSP, HSTS, X-Frame-Options
-- **Reverse Proxy**: Nginx with request filtering
-- **Container Security**: Resource limits and isolation
-- **Intrusion Prevention**: Fail2ban integration
-
 ## ⚡ Performance & Scalability
 
 ### Job Queue System
@@ -54,22 +46,6 @@ A production-ready file deduplication system built with Rust and React, featurin
 - **Worker Scaling**: Configurable worker processes
 - **Proxy Configuration**: Nginx upstream load balancing
 - **Orchestration**: Docker Compose for container management
-
-### Monitoring & Alerting
-
-- **Application Metrics**:
-  - Request rates and response times
-  - Error rates and queue depth
-  - User activity and job completion rates
-- **System Metrics**:
-  - CPU, memory, and disk utilization
-  - Network traffic and latency
-  - Container health and resource usage
-- **Security Metrics**:
-  - Failed authentication attempts
-  - Rate limit violations
-  - Malware detection events
-- **Visualization**: Grafana dashboards with configurable alerts
 
 ## 📊 Observability & Monitoring
 
